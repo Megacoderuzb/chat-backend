@@ -17,13 +17,16 @@ export class AuthService {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
     const user = await this.usersService.create(username, passwordHash);
-    
-    const userId = user._id ? user._id.toString() : (user as any).id;
-    const payload = { sub: userId, username: user.username };
+
+    const userId = user._id ? user._id.toString() : (user.id || '');
+    const payload = { sub: userId, id: userId, username: user.username };
+    const token = this.jwtService.sign(payload);
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: token,
+      token,
       user: {
         id: userId,
+        _id: userId,
         username: user.username,
         createdAt: user.createdAt,
       },
@@ -42,12 +45,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const userId = user._id ? user._id.toString() : (user as any).id;
-    const payload = { sub: userId, username: user.username };
+    const userId = user._id ? user._id.toString() : (user.id || '');
+    const payload = { sub: userId, id: userId, username: user.username };
+    const token = this.jwtService.sign(payload);
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: token,
+      token,
       user: {
         id: userId,
+        _id: userId,
         username: user.username,
         createdAt: user.createdAt,
       },

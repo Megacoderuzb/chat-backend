@@ -14,8 +14,8 @@ export class UsersService {
     return this.userModel.findOne({ username }).exec();
   }
 
-  async findById(id: any): Promise<UserDocument | null> {
-    if (!id || !Types.ObjectId.isValid(id.toString())) return null;
+  async findById(id: string): Promise<UserDocument | null> {
+    if (!id || !Types.ObjectId.isValid(id)) return null;
     return this.userModel.findById(id).exec();
   }
 
@@ -28,19 +28,15 @@ export class UsersService {
     return user.save();
   }
 
-  async search(query: string, currentUserId: any): Promise<any[]> {
-    if (!query || !query.trim()) return [];
-    const filter: any = {
-      username: { $regex: query.trim(), $options: 'i' },
-    };
-    if (currentUserId && Types.ObjectId.isValid(currentUserId.toString())) {
-      filter._id = { $ne: new Types.ObjectId(currentUserId.toString()) };
+  async search(query: string, currentUserId: string): Promise<any[]> {
+    const filter: any = {};
+    if (query && query.trim()) {
+      filter.username = { $regex: query.trim(), $options: 'i' };
+    }
+    if (currentUserId && Types.ObjectId.isValid(currentUserId)) {
+      filter._id = { $ne: new Types.ObjectId(currentUserId) };
     }
     const users = await this.userModel.find(filter).limit(20).exec();
-    return users.map((u) => ({
-      id: u._id.toString(),
-      username: u.username,
-      createdAt: u.createdAt,
-    }));
+    return users.map((u) => (u.toJSON ? u.toJSON() : { id: u._id.toString(), username: u.username, createdAt: u.createdAt }));
   }
 }
