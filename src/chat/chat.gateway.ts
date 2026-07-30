@@ -267,14 +267,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const formattedMessage = updated.toJSON ? updated.toJSON() : updated;
     const msgId = extractId(formattedMessage.id || formattedMessage._id);
-    const authorId = extractId(formattedMessage.authorId);
-    const recipientId = extractId(formattedMessage.recipientId);
-    const roomId = extractId(formattedMessage.roomId);
+
+    const authorId = extractId(updated.authorId?._id || updated.authorId || formattedMessage.authorId);
+    const recipientId = extractId(updated.recipientId?._id || updated.recipientId || formattedMessage.recipientId);
+    const roomId = extractId(updated.roomId?._id || updated.roomId || formattedMessage.roomId);
 
     const eventPayload = {
       messageId: msgId,
       content: formattedMessage.content,
       updatedAt: formattedMessage.updatedAt,
+      authorId,
+      recipientId,
+      roomId,
     };
 
     if (roomId) {
@@ -299,12 +303,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const formattedMessage = deleted.toJSON ? deleted.toJSON() : deleted;
     const msgId = extractId(formattedMessage.id || formattedMessage._id);
-    const authorId = extractId(formattedMessage.authorId);
-    const recipientId = extractId(formattedMessage.recipientId);
-    const roomId = extractId(formattedMessage.roomId);
+
+    const authorId = extractId(deleted.authorId?._id || deleted.authorId || formattedMessage.authorId);
+    const recipientId = extractId(deleted.recipientId?._id || deleted.recipientId || formattedMessage.recipientId);
+    const roomId = extractId(deleted.roomId?._id || deleted.roomId || formattedMessage.roomId);
 
     const eventPayload = {
       messageId: msgId,
+      authorId,
+      recipientId,
+      roomId,
     };
 
     if (roomId) {

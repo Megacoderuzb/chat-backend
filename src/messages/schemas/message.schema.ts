@@ -18,8 +18,8 @@ export class Message {
   @Prop({ type: Types.ObjectId, ref: 'User', required: false, default: null })
   recipientId?: Types.ObjectId;
 
-  @Prop({ required: true })
-  content: string;
+  @Prop({ required: false, default: null })
+  content?: string;
 
   createdAt: Date;
   updatedAt: Date;

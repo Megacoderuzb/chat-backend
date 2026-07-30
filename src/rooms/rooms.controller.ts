@@ -79,6 +79,13 @@ export class RoomsController {
     return this.roomsService.searchPublic(q);
   }
 
+  @Get(':id/members')
+  @ApiOperation({ summary: 'Get list of room members' })
+  @ApiResponse({ status: 200, description: 'List of room members' })
+  async getMembers(@Param('id') id: string) {
+    return this.roomsService.getMembers(id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get details of a specific room by ID' })
   @ApiResponse({ status: 200, description: 'Room details' })

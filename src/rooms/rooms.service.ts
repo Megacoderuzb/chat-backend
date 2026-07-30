@@ -121,6 +121,14 @@ export class RoomsService {
     await member.deleteOne();
   }
 
+  async getMembers(roomId: string): Promise<RoomMemberDocument[]> {
+    if (!roomId || !Types.ObjectId.isValid(roomId)) return [];
+    return this.roomMemberModel
+      .find({ roomId: new Types.ObjectId(roomId) } as any)
+      .populate('userId', 'username')
+      .exec();
+  }
+
   // --- INVITES ---
   async createInvite(roomId: string, inviterId: string, inviteeId: string): Promise<RoomInviteDocument> {
     const isMember = await this.isMember(roomId, inviterId);
