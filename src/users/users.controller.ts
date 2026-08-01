@@ -20,7 +20,7 @@ export class UsersController {
     if (!user) {
       throw new NotFoundException('User profile not found');
     }
-    const userObj = user.toJSON ? user.toJSON() : user;
+    const userObj = { ...user };
     delete (userObj as any).passwordHash;
     return userObj;
   }

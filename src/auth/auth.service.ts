@@ -18,7 +18,7 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(password, salt);
     const user = await this.usersService.create(username, passwordHash);
 
-    const userId = user._id ? user._id.toString() : (user.id || '');
+    const userId = user.id;
     const payload = { sub: userId, id: userId, username: user.username };
     const token = this.jwtService.sign(payload);
     return {
@@ -45,7 +45,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const userId = user._id ? user._id.toString() : (user.id || '');
+    const userId = user.id;
     const payload = { sub: userId, id: userId, username: user.username };
     const token = this.jwtService.sign(payload);
     return {

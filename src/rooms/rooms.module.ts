@@ -1,28 +1,25 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { RoomsService } from './rooms.service';
 import { RoomsController } from './rooms.controller';
-import { Room, RoomSchema } from './schemas/room.schema';
-import { RoomMember, RoomMemberSchema } from './schemas/room-member.schema';
-import { RoomInvite, RoomInviteSchema } from './schemas/room-invite.schema';
-import { RoomJoinRequest, RoomJoinRequestSchema } from './schemas/room-join-request.schema';
-import { Message, MessageSchema } from '../messages/schemas/message.schema';
-import { RoomMembershipGuard } from './guards/room-membership.guard';
+import { Room } from './entities/room.entity';
+import { RoomMember } from './entities/room-member.entity';
+import { RoomInvite } from './entities/room-invite.entity';
+import { RoomJoinRequest } from './entities/room-join-request.entity';
+import { Message } from '../messages/entities/message.entity';
+import { MessagesModule } from '../messages/messages.module';
+import { UsersModule } from '../users/users.module';
 import { ChatModule } from '../chat/chat.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: Room.name, schema: RoomSchema },
-      { name: RoomMember.name, schema: RoomMemberSchema },
-      { name: RoomInvite.name, schema: RoomInviteSchema },
-      { name: RoomJoinRequest.name, schema: RoomJoinRequestSchema },
-      { name: Message.name, schema: MessageSchema },
-    ]),
+    TypeOrmModule.forFeature([Room, RoomMember, RoomInvite, RoomJoinRequest, Message]),
+    forwardRef(() => MessagesModule),
     forwardRef(() => ChatModule),
+    UsersModule,
   ],
   controllers: [RoomsController],
-  providers: [RoomsService, RoomMembershipGuard],
-  exports: [RoomsService, RoomMembershipGuard],
+  providers: [RoomsService],
+  exports: [RoomsService],
 })
 export class RoomsModule {}

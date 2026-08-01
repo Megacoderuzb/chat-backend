@@ -17,7 +17,7 @@ import { RoomsModule } from '../rooms/rooms.module';
       inject: [ConfigService],
     }),
     UsersModule,
-    MessagesModule,
+    forwardRef(() => MessagesModule),
     forwardRef(() => RoomsModule),
   ],
   providers: [ChatGateway],

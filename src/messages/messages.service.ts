@@ -1,108 +1,106 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { Message, MessageDocument } from './schemas/message.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, IsNull } from 'typeorm';
+import { Message } from './entities/message.entity';
 import { RoomsService } from '../rooms/rooms.service';
 import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class MessagesService {
   constructor(
-    @InjectModel(Message.name)
-    private readonly messageModel: Model<MessageDocument>,
+    @InjectRepository(Message)
+    private readonly messageRepository: Repository<Message>,
     @Inject(forwardRef(() => RoomsService))
     private readonly roomsService: RoomsService,
     private readonly usersService: UsersService,
   ) {}
 
-  async createRoomMessage(authorId: string, roomId: string, content: string): Promise<MessageDocument> {
+  async createRoomMessage(authorId: string, roomId: string, content: string): Promise<Message> {
     const isMember = await this.roomsService.isMember(roomId, authorId);
     if (!isMember) {
       throw new ForbiddenException('You must be a member of the room to send messages');
     }
 
-    const message = new this.messageModel({
-      authorId: new Types.ObjectId(authorId),
-      roomId: new Types.ObjectId(roomId),
+    const message = this.messageRepository.create({
+      authorId,
+      roomId,
       content,
     });
-    const saved = await message.save();
-    return this.findById(saved._id.toString());
+    const saved = await this.messageRepository.save(message);
+    return this.findById(saved.id);
   }
 
-  async createDirectMessage(authorId: string, recipientId: string, content: string): Promise<MessageDocument> {
+  async createDirectMessage(authorId: string, recipientId: string, content: string): Promise<Message> {
     const recipient = await this.usersService.findById(recipientId);
     if (!recipient) {
       throw new NotFoundException('Recipient user not found');
     }
 
-    const message = new this.messageModel({
-      authorId: new Types.ObjectId(authorId),
-      recipientId: new Types.ObjectId(recipientId),
+    const message = this.messageRepository.create({
+      authorId,
+      recipientId,
       content,
     });
-    const saved = await message.save();
-    return this.findById(saved._id.toString());
+    const saved = await this.messageRepository.save(message);
+    return this.findById(saved.id);
   }
 
-  async getRoomHistory(roomId: string, userId: string, limit = 50, beforeCursor?: string): Promise<MessageDocument[]> {
+  async getRoomHistory(roomId: string, userId: string, limit = 50, beforeCursor?: string): Promise<Message[]> {
     const isMember = await this.roomsService.isMember(roomId, userId);
     if (!isMember) {
       throw new ForbiddenException('You must be a member of the room to view history');
     }
 
-    const query: any = { roomId: new Types.ObjectId(roomId) };
-    if (beforeCursor && Types.ObjectId.isValid(beforeCursor)) {
-      query._id = { $lt: new Types.ObjectId(beforeCursor) };
+    const qb = this.messageRepository
+      .createQueryBuilder('message')
+      .leftJoinAndSelect('message.author', 'author')
+      .leftJoinAndSelect('message.recipient', 'recipient')
+      .where('message.roomId = :roomId', { roomId });
+
+    if (beforeCursor) {
+      const cursorMsg = await this.messageRepository.findOne({ where: { id: beforeCursor } });
+      if (cursorMsg) {
+        qb.andWhere('message.createdAt < :createdAt', { createdAt: cursorMsg.createdAt });
+      }
     }
 
-    return this.messageModel
-      .find(query)
-      .populate('authorId', 'username')
-      .populate('recipientId', 'username')
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .exec();
+    return qb.orderBy('message.createdAt', 'DESC').limit(limit).getMany();
   }
 
-  async getDirectHistory(userId: string, otherUserId: string, limit = 50, beforeCursor?: string): Promise<MessageDocument[]> {
+  async getDirectHistory(userId: string, otherUserId: string, limit = 50, beforeCursor?: string): Promise<Message[]> {
     const otherUser = await this.usersService.findById(otherUserId);
     if (!otherUser) {
       throw new NotFoundException('User not found');
     }
 
-    const uId = new Types.ObjectId(userId);
-    const oId = new Types.ObjectId(otherUserId);
+    const qb = this.messageRepository
+      .createQueryBuilder('message')
+      .leftJoinAndSelect('message.author', 'author')
+      .leftJoinAndSelect('message.recipient', 'recipient')
+      .where(
+        '((message.authorId = :userId AND message.recipientId = :otherUserId) OR (message.authorId = :otherUserId AND message.recipientId = :userId))',
+        { userId, otherUserId },
+      );
 
-    const query: any = {
-      $or: [
-        { authorId: uId, recipientId: oId },
-        { authorId: oId, recipientId: uId },
-      ],
-    };
-    if (beforeCursor && Types.ObjectId.isValid(beforeCursor)) {
-      query._id = { $lt: new Types.ObjectId(beforeCursor) };
+    if (beforeCursor) {
+      const cursorMsg = await this.messageRepository.findOne({ where: { id: beforeCursor } });
+      if (cursorMsg) {
+        qb.andWhere('message.createdAt < :createdAt', { createdAt: cursorMsg.createdAt });
+      }
     }
 
-    return this.messageModel
-      .find(query)
-      .populate('authorId', 'username')
-      .populate('recipientId', 'username')
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .exec();
+    return qb.orderBy('message.createdAt', 'DESC').limit(limit).getMany();
   }
 
-  async findById(id: string): Promise<MessageDocument | null> {
-    if (!id || !Types.ObjectId.isValid(id)) return null;
-    return this.messageModel
-      .findById(id)
-      .populate('authorId', 'username')
-      .populate('recipientId', 'username')
-      .exec();
+  async findById(id: string): Promise<Message | null> {
+    if (!id) return null;
+    return this.messageRepository.findOne({
+      where: { id },
+      relations: { author: true, recipient: true },
+    });
   }
 
-  async updateMessage(id: string, userId: string, content: string): Promise<MessageDocument> {
+  async updateMessage(id: string, userId: string, content: string): Promise<Message> {
     const message = await this.findById(id);
     if (!message) {
       throw new NotFoundException('Message not found');
@@ -112,80 +110,62 @@ export class MessagesService {
       throw new BadRequestException('Cannot edit a deleted message');
     }
 
-    const authorObj: any = message.authorId;
-    const authorIdStr = authorObj
-      ? (typeof authorObj === 'object'
-          ? (authorObj._id ? authorObj._id.toString() : authorObj.id ? authorObj.id.toString() : String(authorObj))
-          : String(authorObj))
-      : '';
-
-    if (authorIdStr !== userId) {
+    if (message.authorId !== userId) {
       throw new ForbiddenException('Only the author can edit this message');
     }
 
     message.content = content;
-    await message.save();
+    await this.messageRepository.save(message);
     return this.findById(id);
   }
 
-  async deleteMessage(id: string, userId: string): Promise<MessageDocument> {
+  async deleteMessage(id: string, userId: string): Promise<Message> {
     const message = await this.findById(id);
     if (!message) {
       throw new NotFoundException('Message not found');
     }
 
-    const authorObj: any = message.authorId;
-    const authorIdStr = authorObj
-      ? (typeof authorObj === 'object'
-          ? (authorObj._id ? authorObj._id.toString() : authorObj.id ? authorObj.id.toString() : String(authorObj))
-          : String(authorObj))
-      : '';
-
-    if (authorIdStr !== userId) {
+    if (message.authorId !== userId) {
       throw new ForbiddenException('Only the author can delete this message');
     }
 
     if (!message.deletedAt) {
       message.deletedAt = new Date();
       message.content = null;
-      await message.save();
+      await this.messageRepository.save(message);
     }
 
     return this.findById(id);
   }
 
   async getRecentDmUsers(userId: string): Promise<Array<{ id: string; username: string; lastMessage?: string; lastMessageAt?: string }>> {
-    if (!userId || !Types.ObjectId.isValid(userId)) return [];
-    const uId = new Types.ObjectId(userId);
+    if (!userId) return [];
 
-    const messages = await this.messageModel
-      .find({
-        roomId: null,
-        $or: [{ authorId: uId }, { recipientId: uId }],
-      } as any)
-      .sort({ createdAt: -1 })
-      .populate('authorId', 'username')
-      .populate('recipientId', 'username')
-      .exec();
+    const messages = await this.messageRepository.find({
+      where: [
+        { roomId: IsNull(), authorId: userId },
+        { roomId: IsNull(), recipientId: userId },
+      ],
+      order: { createdAt: 'DESC' },
+      relations: { author: true, recipient: true },
+    });
 
     const userMap = new Map<string, { id: string; username: string; lastMessage?: string; lastMessageAt?: string }>();
 
     for (const msg of messages) {
-      const author: any = msg.authorId;
-      const recipient: any = msg.recipientId;
+      const author = msg.author;
+      const recipient = msg.recipient;
       const content = msg.deletedAt ? 'This message was deleted' : msg.content;
-      const createdAt = msg.createdAt ? (msg.createdAt instanceof Date ? msg.createdAt.toISOString() : String(msg.createdAt)) : undefined;
+      const createdAt = msg.createdAt ? msg.createdAt.toISOString() : undefined;
 
-      if (author && author._id && author._id.toString() !== userId) {
-        const id = author._id.toString();
-        if (!userMap.has(id)) {
-          userMap.set(id, { id, username: author.username, lastMessage: content, lastMessageAt: createdAt });
+      if (author && author.id !== userId) {
+        if (!userMap.has(author.id)) {
+          userMap.set(author.id, { id: author.id, username: author.username, lastMessage: content, lastMessageAt: createdAt });
         }
       }
-      if (recipient && recipient._id && recipient._id.toString() !== userId) {
-        const id = recipient._id.toString();
-        if (!userMap.has(id)) {
-          userMap.set(id, { id, username: recipient.username, lastMessage: content, lastMessageAt: createdAt });
+      if (recipient && recipient.id !== userId) {
+        if (!userMap.has(recipient.id)) {
+          userMap.set(recipient.id, { id: recipient.id, username: recipient.username, lastMessage: content, lastMessageAt: createdAt });
         }
       }
     }

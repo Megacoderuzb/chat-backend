@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
@@ -14,11 +14,18 @@ import { ChatModule } from './chat/chat.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    MongooseModule.forRootAsync({
+    TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGODB_URI', 'mongodb://localhost:27017/livechat'),
+        type: 'postgres',
+        host: configService.get<string>('POSTGRES_HOST', 'localhost'),
+        port: configService.get<number>('POSTGRES_PORT', 5432),
+        username: configService.get<string>('POSTGRES_USER', 'postgres'),
+        password: configService.get<string>('POSTGRES_PASSWORD', 'postgres'),
+        database: configService.get<string>('POSTGRES_DB', 'livechat'),
+        autoLoadEntities: true,
+        synchronize: true,
       }),
     }),
     UsersModule,
